@@ -1,0 +1,29 @@
+{
+  "version": 8,
+  "name": "Local style",
+  "center": [-73.696289, 40.680630],
+  "zoom": 12,
+  "sources": {
+    "newyork-source": {
+      "type": "vector",
+      "tiles": [
+        "http://localhost:8080/{z}/{x}/{y}.pbf"
+      ],
+      "minzoom": 0,
+      "maxzoom": 12
+    }
+  },
+  "layers": [
+    {
+      "id": "ny-polygons",
+      "type": "fill",
+      "source": "newyork-source",
+      "source-layer": "newyork-source",
+      "paint": {
+        "fill-color": "#088",
+        "fill-opacity": 0.5,
+        "fill-outline-color": "#000000"
+      }
+    }
+  ]
+}
