@@ -33,27 +33,27 @@ import CoreGraphics
 
 // Custom overlay cho ảnh raster
 class ImageOverlay: NSObject, MKOverlay {
-    var coordinate: CLLocationCoordinate2D
-    var boundingMapRect: MKMapRect
-    var image: UIImage
-
-    init(image: UIImage, boundingMapRect: MKMapRect, coordinate: CLLocationCoordinate2D) {
-        self.image = image
-        self.boundingMapRect = boundingMapRect
-        self.coordinate = coordinate
-    }
+  var coordinate: CLLocationCoordinate2D
+  var boundingMapRect: MKMapRect
+  var image: UIImage
+  
+  init(image: UIImage, boundingMapRect: MKMapRect, coordinate: CLLocationCoordinate2D) {
+    self.image = image
+    self.boundingMapRect = boundingMapRect
+    self.coordinate = coordinate
+  }
 }
 
 // Custom renderer cho overlay ảnh
 class ImageOverlayRenderer: MKOverlayRenderer {
-    override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
-        guard let overlay = overlay as? ImageOverlay else { return }
-        let rect = self.rect(for: overlay.boundingMapRect)
-        context.saveGState()
-        context.setAlpha(1.0)
-        context.draw(overlay.image.cgImage!, in: rect)
-        context.restoreGState()
-    }
+  override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+    guard let overlay = overlay as? ImageOverlay else { return }
+    let rect = self.rect(for: overlay.boundingMapRect)
+    context.saveGState()
+    context.setAlpha(1.0)
+    context.draw(overlay.image.cgImage!, in: rect)
+    context.restoreGState()
+  }
 }
 
 class CenterMapViewController: UIViewController, MKMapViewDelegate {
@@ -78,6 +78,10 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     mapView.frame = view.bounds
     mapView.mapType = .satellite
     mapView.delegate = self
+    
+    // Thêm gesture recognizer để bắt sự kiện tap
+    let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
+    mapView.addGestureRecognizer(tapGesture)
     
     loadTileMetadata()
     
@@ -133,7 +137,7 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     for tile in tilesToLoad {
       DispatchQueue.global(qos: .userInitiated).async {
         print("[Debugtile] Loading tile \(tile.file)")
-        let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "AlaskaTilePython3", filename: tile.file)
+        let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "NewYorkTilePython", filename: tile.file)
         
         DispatchQueue.main.async {[weak self] in
           guard let self else {
@@ -153,54 +157,95 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     loadedTileFiles.removeAll()
   }
   
-  func drawVisiblePolygonsAsImageOverlay() {
-    // Chỉ render khi zoom đủ gần (latitudeDelta nhỏ hơn 1.0)
-    if mapView.region.span.latitudeDelta > 0.01 {
-      if let old = imageOverlay {
-        mapView.removeOverlay(old)
-        imageOverlay = nil
-      }
-      return
+  func areaOfPolygon(_ polygon: MKPolygon) -> Double {
+    guard polygon.pointCount > 2 else { return 0 }
+    let points = polygon.points()
+    var area: Double = 0
+    for i in 0..<polygon.pointCount {
+      let p1 = points[i]
+      let p2 = points[(i+1) % polygon.pointCount]
+      area += (p1.x * p2.y - p2.x * p1.y)
     }
-    // 1. Lấy các polygon nằm trong visibleMapRect
-    let visibleRect = mapView.visibleMapRect
-    var visiblePolygons: [MKPolygon] = []
-    for tile in tiles {
-      if let cached = geoJsonCache[tile.file] {
-        for polygon in cached {
-          if visibleRect.intersects(polygon.boundingMapRect) {
-            visiblePolygons.append(polygon)
-          }
-        }
-      } else {
-        let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "AlaskaTilePython3", filename: tile.file)
-        let polygons = overlays.compactMap { $0 as? MKPolygon }
-        geoJsonCache[tile.file] = polygons
-        for polygon in polygons {
-          if visibleRect.intersects(polygon.boundingMapRect) {
-            visiblePolygons.append(polygon)
-          }
-        }
-      }
-    }
-    guard !visiblePolygons.isEmpty else {
-      if let old = imageOverlay {
-        mapView.removeOverlay(old)
-        imageOverlay = nil
-      }
-      return
-    }
-    // 2. Render ảnh cho vùng visibleRect
-    let image = renderPolygonsToImage(polygons: visiblePolygons, boundingMapRect: visibleRect)
-    let center = MKMapPoint(x: visibleRect.midX, y: visibleRect.midY).coordinate
-    let overlay = ImageOverlay(image: image, boundingMapRect: visibleRect, coordinate: center)
-    if let old = imageOverlay {
-      mapView.removeOverlay(old)
-    }
-    imageOverlay = overlay
-    mapView.addOverlay(overlay)
+    return abs(area) / 2.0
   }
-
+  
+  func distanceToCenter(_ polygon: MKPolygon, center: MKMapPoint) -> Double {
+    let boundingRect = polygon.boundingMapRect
+    let polyCenter = MKMapPoint(x: boundingRect.midX, y: boundingRect.midY)
+    let dx = polyCenter.x - center.x
+    let dy = polyCenter.y - center.y
+    return sqrt(dx*dx + dy*dy)
+  }
+  
+  func drawVisiblePolygonsAsImageOverlay() {
+    if mapView.region.span.latitudeDelta > 0.05 {
+        if let old = imageOverlay {
+            mapView.removeOverlay(old)
+            imageOverlay = nil
+        }
+        return
+    }
+    let visibleRect = mapView.visibleMapRect
+    let geojsonFiles = listGeoJSONFiles(in: "AlaskaTilePython3")
+    let centerMapPoint = MKMapPoint(x: visibleRect.midX, y: visibleRect.midY)
+    
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        guard let self = self else { return }
+        var visiblePolygons: [MKPolygon] = []
+        for file in geojsonFiles {
+            let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "AlaskaTilePython3", filename: file)
+            let polygons = overlays.compactMap { $0 as? MKPolygon }
+            for polygon in polygons {
+                if visibleRect.intersects(polygon.boundingMapRect) {
+                    visiblePolygons.append(polygon)
+                }
+            }
+        }
+        // Lọc theo diện tích lớn nhất và ưu tiên polygon gần tâm bản đồ
+        let sortedPolygons = visiblePolygons.sorted {
+            let area1 = self.areaOfPolygon($0)
+            let area2 = self.areaOfPolygon($1)
+            if abs(area1 - area2) > 1e-6 {
+                return area1 > area2 // diện tích lớn lên trước
+            } else {
+                return self.distanceToCenter($0, center: centerMapPoint) < self.distanceToCenter($1, center: centerMapPoint)
+            }
+        }
+        let limitedPolygons = Array(sortedPolygons.prefix(200))
+        guard !limitedPolygons.isEmpty else {
+            DispatchQueue.main.async {
+                if let old = self.imageOverlay {
+                    self.mapView.removeOverlay(old)
+                    self.imageOverlay = nil
+                }
+            }
+            return
+        }
+        let image = self.renderPolygonsToImage(polygons: limitedPolygons, boundingMapRect: visibleRect)
+        let center = MKMapPoint(x: visibleRect.midX, y: visibleRect.midY).coordinate
+        let overlay = ImageOverlay(image: image, boundingMapRect: visibleRect, coordinate: center)
+        DispatchQueue.main.async {
+            if let old = self.imageOverlay {
+                self.mapView.removeOverlay(old)
+            }
+            self.imageOverlay = overlay
+            self.mapView.addOverlay(overlay)
+        }
+    }
+  }
+  
+  func listGeoJSONFiles(in directory: String) -> [String] {
+    guard let resourcePath = Bundle.main.resourcePath else { return [] }
+    let dirPath = (resourcePath as NSString).appendingPathComponent(directory)
+    do {
+      let files = try FileManager.default.contentsOfDirectory(atPath: dirPath)
+      return files.filter { $0.hasSuffix(".geojson") }
+    } catch {
+      print("Lỗi khi đọc thư mục: \(error)")
+      return []
+    }
+  }
+  
   func renderPolygonsToImage(polygons: [MKPolygon], boundingMapRect: MKMapRect) -> UIImage {
     // Giới hạn kích thước ảnh tối đa
     let maxImageSize: CGFloat = 1024.0
@@ -209,40 +254,40 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     let scaleX = maxImageSize / mapRectWidth
     let scaleY = maxImageSize / mapRectHeight
     let scale = min(scaleX, scaleY, 1.0) // Không upscale nếu vùng nhỏ
-
+    
     let width = mapRectWidth * scale
     let height = mapRectHeight * scale
     let size = CGSize(width: width, height: height)
     UIGraphicsBeginImageContextWithOptions(size, false, 0)
     guard let context = UIGraphicsGetCurrentContext() else { return UIImage() }
-    context.setLineWidth(1.0)
+    context.setLineWidth(1.5)
     context.setStrokeColor(UIColor.yellow.cgColor)
     context.setFillColor(UIColor.clear.cgColor)
     for polygon in polygons {
-        let path = UIBezierPath()
-        let points = polygon.points()
-        let count = polygon.pointCount
-        for i in 0..<count {
-            let mapPoint = points[i]
-            let cgPoint = CGPoint(
-                x: (CGFloat(mapPoint.x - boundingMapRect.origin.x) * scale),
-                y: (height - (CGFloat(mapPoint.y - boundingMapRect.origin.y) * scale))
-            )
-            if i == 0 {
-                path.move(to: cgPoint)
-            } else {
-                path.addLine(to: cgPoint)
-            }
+      let path = UIBezierPath()
+      let points = polygon.points()
+      let count = polygon.pointCount
+      for i in 0..<count {
+        let mapPoint = points[i]
+        let cgPoint = CGPoint(
+          x: (CGFloat(mapPoint.x - boundingMapRect.origin.x) * scale),
+          y: (height - (CGFloat(mapPoint.y - boundingMapRect.origin.y) * scale))
+        )
+        if i == 0 {
+          path.move(to: cgPoint)
+        } else {
+          path.addLine(to: cgPoint)
         }
-        path.close()
-        context.addPath(path.cgPath)
-        context.drawPath(using: .stroke)
+      }
+      path.close()
+      context.addPath(path.cgPath)
+      context.drawPath(using: .stroke)
     }
     let image = UIGraphicsGetImageFromCurrentImageContext() ?? UIImage()
     UIGraphicsEndImageContext()
     return image
   }
-
+  
   // MARK: - MKMapViewDelegate
   func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
     regionChangeWorkItem?.cancel()
@@ -271,5 +316,61 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
       return renderer
     }
     return MKOverlayRenderer()
+  }
+  
+  // MARK: - Xử lý tap để lấy địa chỉ và hiển thị info view
+  @objc func handleMapTap(_ gesture: UITapGestureRecognizer) {
+    let point = gesture.location(in: mapView)
+    let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+    // Reverse geocode
+    let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    let geocoder = CLGeocoder()
+    geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+      guard let self = self else { return }
+      var address = "Không tìm thấy địa chỉ"
+      if let placemark = placemarks?.first {
+        address = [
+          placemark.name,
+          placemark.thoroughfare,
+          placemark.subLocality,
+          placemark.locality,
+          placemark.administrativeArea,
+          placemark.country
+        ].compactMap { $0 }.joined(separator: ", ")
+      }
+      self.showInfoView(at: point, address: address)
+    }
+  }
+  
+  func showInfoView(at point: CGPoint, address: String) {
+    // Xoá view cũ nếu có
+    mapView.subviews.filter { $0.tag == 9999 }.forEach { $0.removeFromSuperview() }
+    // Tạo view mới
+    let infoView = UILabel()
+    infoView.tag = 9999
+    infoView.text = address
+    infoView.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+    infoView.textColor = .white
+    infoView.font = UIFont.systemFont(ofSize: 14)
+    infoView.numberOfLines = 0
+    infoView.textAlignment = .center
+    infoView.layer.cornerRadius = 8
+    infoView.layer.masksToBounds = true
+    let maxWidth: CGFloat = 220
+    let size = infoView.sizeThatFits(CGSize(width: maxWidth, height: CGFloat.greatestFiniteMagnitude))
+    let infoViewHeight: CGFloat = size.height + 20
+    let infoViewY = mapView.bounds.height - infoViewHeight - 24
+    infoView.frame = CGRect(
+      x: (mapView.bounds.width - min(size.width, maxWidth) - 16) / 2,
+      y: infoViewY,
+      width: min(size.width, maxWidth) + 16,
+      height: infoViewHeight
+    )
+    infoView.alpha = 0
+    mapView.addSubview(infoView)
+    UIView.animate(withDuration: 0.2) {
+      infoView.alpha = 1
+    }
+    // KHÔNG tự động ẩn nữa!
   }
 }
