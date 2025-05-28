@@ -16,7 +16,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     
     let window = UIWindow(windowScene: windowScene)
-    let navigationController = UINavigationController(rootViewController: MapViewController())
+    let navigationController = UINavigationController(rootViewController: MapKitVC())
     navigationController.isNavigationBarHidden = true
     
     window.rootViewController = navigationController
@@ -24,4 +24,3 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     window.makeKeyAndVisible()
   }
 }
-

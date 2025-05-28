@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "tile_feature_1703",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "release": 1, "capture_dates_range": "" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -147.488948, 65.111553 ], [ -147.488794, 65.111503 ], [ -147.488821, 65.111488 ], [ -147.488633, 65.111428 ], [ -147.488567, 65.111465 ], [ -147.48891, 65.111574 ], [ -147.488948, 65.111553 ] ] ] } }
+]
+}

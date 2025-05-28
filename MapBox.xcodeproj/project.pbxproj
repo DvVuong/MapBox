@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A2B53E22DE4144A0091CAEE /* AlaskaTilePython in Resources */ = {isa = PBXBuildFile; fileRef = 0A2B53E12DE4144A0091CAEE /* AlaskaTilePython */; };
+		0ACCD6462DE5B30700477182 /* AlaskaTilePython3 in Resources */ = {isa = PBXBuildFile; fileRef = 0ACCD6452DE5B30700477182 /* AlaskaTilePython3 */; };
 		0AD484962DE01EFA00CF1FF0 /* tiles in Resources */ = {isa = PBXBuildFile; fileRef = 0AD484952DE01EFA00CF1FF0 /* tiles */; };
 		0AD484992DE01F7400CF1FF0 /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 0AD484982DE01F7400CF1FF0 /* MapboxMaps */; };
 		C0B19D2964EFF37B84B1C9B8 /* Pods_MapBox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CFF0C96BD79F488152C87AA /* Pods_MapBox.framework */; };
@@ -14,6 +16,8 @@
 
 /* Begin PBXFileReference section */
 		0A2990FE2DDF1D8700B318E1 /* MapBox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MapBox.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A2B53E12DE4144A0091CAEE /* AlaskaTilePython */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AlaskaTilePython; sourceTree = "<group>"; };
+		0ACCD6452DE5B30700477182 /* AlaskaTilePython3 */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AlaskaTilePython3; sourceTree = "<group>"; };
 		0AD484952DE01EFA00CF1FF0 /* tiles */ = {isa = PBXFileReference; lastKnownFileType = folder; path = tiles; sourceTree = "<group>"; };
 		0CFF0C96BD79F488152C87AA /* Pods_MapBox.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MapBox.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		651B4BB26754F60DAD5CDC8D /* Pods-MapBox.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MapBox.debug.xcconfig"; path = "Target Support Files/Pods-MapBox/Pods-MapBox.debug.xcconfig"; sourceTree = "<group>"; };
@@ -57,6 +61,8 @@
 		0A2990F52DDF1D8700B318E1 = {
 			isa = PBXGroup;
 			children = (
+				0ACCD6452DE5B30700477182 /* AlaskaTilePython3 */,
+				0A2B53E12DE4144A0091CAEE /* AlaskaTilePython */,
 				0AD484952DE01EFA00CF1FF0 /* tiles */,
 				0A2991002DDF1D8700B318E1 /* MapBox */,
 				0A2990FF2DDF1D8700B318E1 /* Products */,
@@ -160,6 +166,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0ACCD6462DE5B30700477182 /* AlaskaTilePython3 in Resources */,
+				0A2B53E22DE4144A0091CAEE /* AlaskaTilePython in Resources */,
 				0AD484962DE01EFA00CF1FF0 /* tiles in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
