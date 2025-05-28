@@ -69,6 +69,9 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
   
   var imageOverlay: ImageOverlay?
   
+  // Cache kết quả parse GeoJSON
+  var geoJsonCache: [String: [MKPolygon]] = [:]
+  
   override func viewDidLoad() {
     super.viewDidLoad()
     view.addSubview(mapView)
@@ -163,10 +166,20 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     let visibleRect = mapView.visibleMapRect
     var visiblePolygons: [MKPolygon] = []
     for tile in tiles {
-      let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "AlaskaTilePython3", filename: tile.file)
-      for overlay in overlays {
-        if let polygon = overlay as? MKPolygon, visibleRect.intersects(polygon.boundingMapRect) {
-          visiblePolygons.append(polygon)
+      if let cached = geoJsonCache[tile.file] {
+        for polygon in cached {
+          if visibleRect.intersects(polygon.boundingMapRect) {
+            visiblePolygons.append(polygon)
+          }
+        }
+      } else {
+        let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "AlaskaTilePython3", filename: tile.file)
+        let polygons = overlays.compactMap { $0 as? MKPolygon }
+        geoJsonCache[tile.file] = polygons
+        for polygon in polygons {
+          if visibleRect.intersects(polygon.boundingMapRect) {
+            visiblePolygons.append(polygon)
+          }
         }
       }
     }
