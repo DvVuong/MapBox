@@ -16,7 +16,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     
     let window = UIWindow(windowScene: windowScene)
-    let navigationController = UINavigationController(rootViewController: MapKitVC())
+    let navigationController = UINavigationController(rootViewController: CenterMapViewController())
     navigationController.isNavigationBarHidden = true
     
     window.rootViewController = navigationController

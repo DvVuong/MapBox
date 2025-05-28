@@ -6,8 +6,6 @@
 //
 
 // MARK: - Dùng để hiện thị theo center
-import UIKit
-import MapKit
 
 struct GeoTile: Codable {
   let file: String
@@ -31,15 +29,45 @@ struct GeoTile: Codable {
 import CoreLocation
 import UIKit
 import MapKit
+import CoreGraphics
+
+// Custom overlay cho ảnh raster
+class ImageOverlay: NSObject, MKOverlay {
+    var coordinate: CLLocationCoordinate2D
+    var boundingMapRect: MKMapRect
+    var image: UIImage
+
+    init(image: UIImage, boundingMapRect: MKMapRect, coordinate: CLLocationCoordinate2D) {
+        self.image = image
+        self.boundingMapRect = boundingMapRect
+        self.coordinate = coordinate
+    }
+}
+
+// Custom renderer cho overlay ảnh
+class ImageOverlayRenderer: MKOverlayRenderer {
+    override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+        guard let overlay = overlay as? ImageOverlay else { return }
+        let rect = self.rect(for: overlay.boundingMapRect)
+        context.saveGState()
+        context.setAlpha(1.0)
+        context.draw(overlay.image.cgImage!, in: rect)
+        context.restoreGState()
+    }
+}
 
 class CenterMapViewController: UIViewController, MKMapViewDelegate {
   let mapView = MKMapView()
   var tiles: [GeoTile] = []
   
+  var regionChangeWorkItem: DispatchWorkItem?
+  
   var loadedTileFiles: Set<String> = []
   
   // Lưu mapping từ ObjectIdentifier của overlay tới tên file tile
   var overlayTileMap: [ObjectIdentifier: String] = [:]
+  
+  var imageOverlay: ImageOverlay?
   
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -55,6 +83,9 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     let region = MKCoordinateRegion(center: alaskaCenter,
                                     span: MKCoordinateSpan(latitudeDelta: 6, longitudeDelta: 10))
     mapView.setRegion(region, animated: false)
+    
+    // Vẽ overlay ảnh cho vùng nhìn thấy khi load xong
+    drawVisiblePolygonsAsImageOverlay()
   }
   
   func loadTileMetadata() {
@@ -119,21 +150,101 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     loadedTileFiles.removeAll()
   }
   
+  func drawVisiblePolygonsAsImageOverlay() {
+    // Chỉ render khi zoom đủ gần (latitudeDelta nhỏ hơn 1.0)
+    if mapView.region.span.latitudeDelta > 0.01 {
+      if let old = imageOverlay {
+        mapView.removeOverlay(old)
+        imageOverlay = nil
+      }
+      return
+    }
+    // 1. Lấy các polygon nằm trong visibleMapRect
+    let visibleRect = mapView.visibleMapRect
+    var visiblePolygons: [MKPolygon] = []
+    for tile in tiles {
+      let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "AlaskaTilePython3", filename: tile.file)
+      for overlay in overlays {
+        if let polygon = overlay as? MKPolygon, visibleRect.intersects(polygon.boundingMapRect) {
+          visiblePolygons.append(polygon)
+        }
+      }
+    }
+    guard !visiblePolygons.isEmpty else {
+      if let old = imageOverlay {
+        mapView.removeOverlay(old)
+        imageOverlay = nil
+      }
+      return
+    }
+    // 2. Render ảnh cho vùng visibleRect
+    let image = renderPolygonsToImage(polygons: visiblePolygons, boundingMapRect: visibleRect)
+    let center = MKMapPoint(x: visibleRect.midX, y: visibleRect.midY).coordinate
+    let overlay = ImageOverlay(image: image, boundingMapRect: visibleRect, coordinate: center)
+    if let old = imageOverlay {
+      mapView.removeOverlay(old)
+    }
+    imageOverlay = overlay
+    mapView.addOverlay(overlay)
+  }
+
+  func renderPolygonsToImage(polygons: [MKPolygon], boundingMapRect: MKMapRect) -> UIImage {
+    // Giới hạn kích thước ảnh tối đa
+    let maxImageSize: CGFloat = 1024.0
+    let mapRectWidth = CGFloat(boundingMapRect.size.width)
+    let mapRectHeight = CGFloat(boundingMapRect.size.height)
+    let scaleX = maxImageSize / mapRectWidth
+    let scaleY = maxImageSize / mapRectHeight
+    let scale = min(scaleX, scaleY, 1.0) // Không upscale nếu vùng nhỏ
+
+    let width = mapRectWidth * scale
+    let height = mapRectHeight * scale
+    let size = CGSize(width: width, height: height)
+    UIGraphicsBeginImageContextWithOptions(size, false, 0)
+    guard let context = UIGraphicsGetCurrentContext() else { return UIImage() }
+    context.setLineWidth(1.0)
+    context.setStrokeColor(UIColor.yellow.cgColor)
+    context.setFillColor(UIColor.clear.cgColor)
+    for polygon in polygons {
+        let path = UIBezierPath()
+        let points = polygon.points()
+        let count = polygon.pointCount
+        for i in 0..<count {
+            let mapPoint = points[i]
+            let cgPoint = CGPoint(
+                x: (CGFloat(mapPoint.x - boundingMapRect.origin.x) * scale),
+                y: (height - (CGFloat(mapPoint.y - boundingMapRect.origin.y) * scale))
+            )
+            if i == 0 {
+                path.move(to: cgPoint)
+            } else {
+                path.addLine(to: cgPoint)
+            }
+        }
+        path.close()
+        context.addPath(path.cgPath)
+        context.drawPath(using: .stroke)
+    }
+    let image = UIGraphicsGetImageFromCurrentImageContext() ?? UIImage()
+    UIGraphicsEndImageContext()
+    return image
+  }
 
   // MARK: - MKMapViewDelegate
   func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-    let span = mapView.region.span
-    let minLatitudeDelta: CLLocationDegrees = 0.01
-    let minLongitudeDelta: CLLocationDegrees = 0.01
-    if span.latitudeDelta <= minLatitudeDelta && span.longitudeDelta <= minLongitudeDelta {
-      loadTilesVisible(at: mapView.region.center)
-      print("[Debug] center:\(mapView.region.center)")
-    } else {
-      clearTiles()
+    regionChangeWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self = self else { return }
+      self.drawVisiblePolygonsAsImageOverlay()
     }
+    regionChangeWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: workItem)
   }
   
   func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+    if let imageOverlay = overlay as? ImageOverlay {
+      return ImageOverlayRenderer(overlay: imageOverlay)
+    }
     if let polygon = overlay as? MKPolygon {
       let renderer = MKPolygonRenderer(polygon: polygon)
       renderer.fillColor = .clear
