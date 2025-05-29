@@ -60,6 +60,8 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
   let mapView = MKMapView()
   var tiles: [GeoTile] = []
   
+  var titleName = "AlaskaTilePython3"
+  
   var regionChangeWorkItem: DispatchWorkItem?
   
   var loadedTileFiles: Set<String> = []
@@ -71,6 +73,9 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
   
   // Cache kết quả parse GeoJSON
   var geoJsonCache: [String: [MKPolygon]] = [:]
+  
+  // Thêm cache cho polygon của từng file GeoJSON
+  var geoJsonFileCache: [String: [MKPolygon]] = [:]
   
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -87,6 +92,7 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     
     // Zoom đến một vùng trong Alaska
     let alaskaCenter = CLLocationCoordinate2D(latitude: 61.1, longitude: -149.8)
+    // let newYorkCenter = CLLocationCoordinate2D(latitude: 40.978175, longitude:  -73.919434)
     let region = MKCoordinateRegion(center: alaskaCenter,
                                     span: MKCoordinateSpan(latitudeDelta: 6, longitudeDelta: 10))
     mapView.setRegion(region, animated: false)
@@ -96,7 +102,7 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
   }
   
   func loadTileMetadata() {
-    guard let url = Bundle.main.url(forResource: "tile_metadata", withExtension: "json", subdirectory: "AlaskaTilePython3") else {
+    guard let url = Bundle.main.url(forResource: "tile_metadata", withExtension: "json", subdirectory: titleName) else {
       print("[Debug] Không tìm thấy file Tiles/tiles.json")
       return
     }
@@ -137,7 +143,7 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     for tile in tilesToLoad {
       DispatchQueue.global(qos: .userInitiated).async {
         print("[Debugtile] Loading tile \(tile.file)")
-        let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "NewYorkTilePython", filename: tile.file)
+        let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: self.titleName, filename: tile.file)
         
         DispatchQueue.main.async {[weak self] in
           guard let self else {
@@ -179,58 +185,71 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
   
   func drawVisiblePolygonsAsImageOverlay() {
     if mapView.region.span.latitudeDelta > 0.05 {
-        if let old = imageOverlay {
-            mapView.removeOverlay(old)
-            imageOverlay = nil
-        }
-        return
+      if let old = imageOverlay {
+        mapView.removeOverlay(old)
+        imageOverlay = nil
+      }
+      return
     }
+    // Lấy mọi thông tin liên quan đến UI trên main thread
     let visibleRect = mapView.visibleMapRect
-    let geojsonFiles = listGeoJSONFiles(in: "AlaskaTilePython3")
+    let geojsonFiles = listGeoJSONFiles(in: titleName)
     let centerMapPoint = MKMapPoint(x: visibleRect.midX, y: visibleRect.midY)
+    // Copy cache ra một biến local (nếu cần)
+    //    var fileCacheCopy: [String: [MKPolygon]] = [:]
+    let fileCacheCopy = self.geoJsonFileCache
     
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-        guard let self = self else { return }
-        var visiblePolygons: [MKPolygon] = []
-        for file in geojsonFiles {
-            let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: "AlaskaTilePython3", filename: file)
-            let polygons = overlays.compactMap { $0 as? MKPolygon }
-            for polygon in polygons {
-                if visibleRect.intersects(polygon.boundingMapRect) {
-                    visiblePolygons.append(polygon)
-                }
-            }
+      guard let self = self else { return }
+      var visiblePolygons: [MKPolygon] = []
+      var localCache = fileCacheCopy // dùng bản copy để tránh race condition
+      for file in geojsonFiles {
+        let polygons: [MKPolygon]
+        if let cached = localCache[file] {
+          polygons = cached
+        } else {
+          let overlays = GeoJsonLoader.loadGeoJSONFile(inDirectory: titleName, filename: file)
+          polygons = overlays.compactMap { $0 as? MKPolygon }
+          localCache[file] = polygons
         }
-        // Lọc theo diện tích lớn nhất và ưu tiên polygon gần tâm bản đồ
-        let sortedPolygons = visiblePolygons.sorted {
-            let area1 = self.areaOfPolygon($0)
-            let area2 = self.areaOfPolygon($1)
-            if abs(area1 - area2) > 1e-6 {
-                return area1 > area2 // diện tích lớn lên trước
-            } else {
-                return self.distanceToCenter($0, center: centerMapPoint) < self.distanceToCenter($1, center: centerMapPoint)
-            }
+        for polygon in polygons {
+          if visibleRect.intersects(polygon.boundingMapRect) {
+            visiblePolygons.append(polygon)
+          }
         }
-        let limitedPolygons = Array(sortedPolygons.prefix(200))
-        guard !limitedPolygons.isEmpty else {
-            DispatchQueue.main.async {
-                if let old = self.imageOverlay {
-                    self.mapView.removeOverlay(old)
-                    self.imageOverlay = nil
-                }
-            }
-            return
+      }
+      // Lọc theo diện tích lớn nhất và ưu tiên polygon gần tâm bản đồ
+      let sortedPolygons = visiblePolygons.sorted {
+        let area1 = self.areaOfPolygon($0)
+        let area2 = self.areaOfPolygon($1)
+        if abs(area1 - area2) > 1e-6 {
+          return area1 > area2 // diện tích lớn lên trước
+        } else {
+          return self.distanceToCenter($0, center: centerMapPoint) < self.distanceToCenter($1, center: centerMapPoint)
         }
-        let image = self.renderPolygonsToImage(polygons: limitedPolygons, boundingMapRect: visibleRect)
-        let center = MKMapPoint(x: visibleRect.midX, y: visibleRect.midY).coordinate
-        let overlay = ImageOverlay(image: image, boundingMapRect: visibleRect, coordinate: center)
+      }
+      let limitedPolygons = Array(sortedPolygons.prefix(200))
+      guard !limitedPolygons.isEmpty else {
         DispatchQueue.main.async {
-            if let old = self.imageOverlay {
-                self.mapView.removeOverlay(old)
-            }
-            self.imageOverlay = overlay
-            self.mapView.addOverlay(overlay)
+          if let old = self.imageOverlay {
+            self.mapView.removeOverlay(old)
+            self.imageOverlay = nil
+          }
         }
+        return
+      }
+      let image = self.renderPolygonsToImage(polygons: limitedPolygons, boundingMapRect: visibleRect)
+      let center = MKMapPoint(x: visibleRect.midX, y: visibleRect.midY).coordinate
+      let overlay = ImageOverlay(image: image, boundingMapRect: visibleRect, coordinate: center)
+      DispatchQueue.main.async {
+        // Cập nhật cache lại trên main thread nếu cần
+        self.geoJsonFileCache = localCache
+        if let old = self.imageOverlay {
+          self.mapView.removeOverlay(old)
+        }
+        self.imageOverlay = overlay
+        self.mapView.addOverlay(overlay)
+      }
     }
   }
   
@@ -322,22 +341,40 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
   @objc func handleMapTap(_ gesture: UITapGestureRecognizer) {
     let point = gesture.location(in: mapView)
     let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
-    // Reverse geocode
+    
     let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
     let geocoder = CLGeocoder()
+    
     geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
       guard let self = self else { return }
-      var address = "Không tìm thấy địa chỉ"
+      
+      var address = "Address not found"
       if let placemark = placemarks?.first {
-        address = [
-          placemark.name,
-          placemark.thoroughfare,
-          placemark.subLocality,
-          placemark.locality,
-          placemark.administrativeArea,
-          placemark.country
-        ].compactMap { $0 }.joined(separator: ", ")
+        // Các thành phần địa chỉ
+        let streetNumber = placemark.subThoroughfare ?? ""
+        
+        let streetName = placemark.thoroughfare ?? ""
+        let city = placemark.locality ?? ""
+        let state = placemark.administrativeArea ?? ""
+        let zip = placemark.postalCode ?? ""
+        
+        let streetPart = [streetNumber, streetName].joined(separator: "-").replacingOccurrences(of: " ", with: "-")
+        let cityPart = city.replacingOccurrences(of: " ", with: "-")
+        
+        address = "\(streetPart),-\(cityPart),-\(state),-\(zip)"
+        print("[Debug] address: \(address)")
+        Task {
+          do {
+            let respones: PropertyLandRespone = try await APIManager.shared.fetchData(from: .propertyDetail(id: address))
+            print("[Debug] respones: \(respones)")
+            
+          } catch let error {
+            print("[Debug] error: \(error)")
+          }
+        }
+       
       }
+      
       self.showInfoView(at: point, address: address)
     }
   }
@@ -371,6 +408,5 @@ class CenterMapViewController: UIViewController, MKMapViewDelegate {
     UIView.animate(withDuration: 0.2) {
       infoView.alpha = 1
     }
-    // KHÔNG tự động ẩn nữa!
   }
 }

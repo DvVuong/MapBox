@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A22E1F72DE6ECBE0095BD2F /* NewYorkTilePython in Resources */ = {isa = PBXBuildFile; fileRef = 0A22E1F62DE6ECBE0095BD2F /* NewYorkTilePython */; };
+		0A22E1FD2DE70BCF0095BD2F /* NewJerseyTileGrid in Resources */ = {isa = PBXBuildFile; fileRef = 0A22E1FC2DE70BCF0095BD2F /* NewJerseyTileGrid */; };
 		0A2B53E22DE4144A0091CAEE /* AlaskaTilePython in Resources */ = {isa = PBXBuildFile; fileRef = 0A2B53E12DE4144A0091CAEE /* AlaskaTilePython */; };
 		0ACCD6462DE5B30700477182 /* AlaskaTilePython3 in Resources */ = {isa = PBXBuildFile; fileRef = 0ACCD6452DE5B30700477182 /* AlaskaTilePython3 */; };
 		0AD484962DE01EFA00CF1FF0 /* tiles in Resources */ = {isa = PBXBuildFile; fileRef = 0AD484952DE01EFA00CF1FF0 /* tiles */; };
@@ -15,6 +17,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0A22E1F62DE6ECBE0095BD2F /* NewYorkTilePython */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NewYorkTilePython; sourceTree = "<group>"; };
+		0A22E1FC2DE70BCF0095BD2F /* NewJerseyTileGrid */ = {isa = PBXFileReference; lastKnownFileType = folder; path = NewJerseyTileGrid; sourceTree = "<group>"; };
 		0A2990FE2DDF1D8700B318E1 /* MapBox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MapBox.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0A2B53E12DE4144A0091CAEE /* AlaskaTilePython */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AlaskaTilePython; sourceTree = "<group>"; };
 		0ACCD6452DE5B30700477182 /* AlaskaTilePython3 */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AlaskaTilePython3; sourceTree = "<group>"; };
@@ -61,6 +65,8 @@
 		0A2990F52DDF1D8700B318E1 = {
 			isa = PBXGroup;
 			children = (
+				0A22E1FC2DE70BCF0095BD2F /* NewJerseyTileGrid */,
+				0A22E1F62DE6ECBE0095BD2F /* NewYorkTilePython */,
 				0ACCD6452DE5B30700477182 /* AlaskaTilePython3 */,
 				0A2B53E12DE4144A0091CAEE /* AlaskaTilePython */,
 				0AD484952DE01EFA00CF1FF0 /* tiles */,
@@ -166,6 +172,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0A22E1FD2DE70BCF0095BD2F /* NewJerseyTileGrid in Resources */,
+				0A22E1F72DE6ECBE0095BD2F /* NewYorkTilePython in Resources */,
 				0ACCD6462DE5B30700477182 /* AlaskaTilePython3 in Resources */,
 				0A2B53E22DE4144A0091CAEE /* AlaskaTilePython in Resources */,
 				0AD484962DE01EFA00CF1FF0 /* tiles in Resources */,

@@ -111,29 +111,63 @@ class GeoJsonLoader {
       return loadGeoJSONFile(from: fileURL)
     }
   
-    private static func loadGeoJSONFile(from fileURL: URL) -> [MKOverlay] {
+//    private static func loadGeoJSONFile(from fileURL: URL) -> [MKOverlay] {
+//      var overlays: [MKOverlay] = []
+//  
+//      do {
+//        let data = try Data(contentsOf: fileURL)
+//        let decoder = MKGeoJSONDecoder()
+//        let features = try decoder.decode(data) as? [MKGeoJSONFeature] ?? []
+//  
+//        for feature in features {
+//          for geometry in feature.geometry {
+//            if let polygon = geometry as? MKPolygon {
+//              overlays.append(polygon)
+//            } else if let polyline = geometry as? MKPolyline {
+//              overlays.append(polyline)
+//            }
+//          }
+//        }
+//      } catch {
+//        print("[Debug] Lỗi khi load file \(fileURL.lastPathComponent): \(error)")
+//      }
+//  
+//      return overlays
+//    }
+  
+  private static func loadGeoJSONFile(from fileURL: URL) -> [MKOverlay] {
       var overlays: [MKOverlay] = []
-  
+
       do {
-        let data = try Data(contentsOf: fileURL)
-        let decoder = MKGeoJSONDecoder()
-        let features = try decoder.decode(data) as? [MKGeoJSONFeature] ?? []
-  
-        for feature in features {
-          for geometry in feature.geometry {
-            if let polygon = geometry as? MKPolygon {
-              overlays.append(polygon)
-            } else if let polyline = geometry as? MKPolyline {
-              overlays.append(polyline)
-            }
+          let data = try Data(contentsOf: fileURL)
+          let decoder = MKGeoJSONDecoder()
+          let featuresAny: [Any]
+          do {
+              featuresAny = try decoder.decode(data)
+          } catch {
+              print("[Debug] Lỗi decode GeoJSON: \(error) - file: \(fileURL.lastPathComponent)")
+              return overlays
           }
-        }
+          guard let features = featuresAny as? [MKGeoJSONFeature] else {
+              print("[Debug] File không phải FeatureCollection: \(fileURL.lastPathComponent)")
+              return overlays
+          }
+
+          for feature in features {
+              for geometry in feature.geometry {
+                  if let polygon = geometry as? MKPolygon {
+                      overlays.append(polygon)
+                  } else if let polyline = geometry as? MKPolyline {
+                      overlays.append(polyline)
+                  }
+              }
+          }
       } catch {
-        print("[Debug] Lỗi khi load file \(fileURL.lastPathComponent): \(error)")
+          print("[Debug] Lỗi khi load file \(fileURL.lastPathComponent): \(error)")
       }
-  
+
       return overlays
-    }
+  }
   
 //  // MARK: - Load GeoJson hiện thị theo Title
 //  static func loadGeoJSONFile(named filename: String) -> [MKOverlay] {
